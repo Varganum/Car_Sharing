@@ -1,74 +1,173 @@
 package carsharing;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.Scanner;
 
 public class Main {
-    // JDBC driver name and database URL
-    static final String JDBC_DRIVER = "org.h2.Driver";
-    static final String DB_URL = "jdbc:h2:file:./src/carsharing/db/";
 
     public static void main(String[] args) {
 
-        Connection conn = null;
-        Statement stmt = null;
+        boolean exit = false;
+        boolean backToLogInMenu = false;
+        boolean backToDBCompanyMenu;
+        int pointLogInMenu;
+        int pointDBCompanyMenu;
+        int chosenCompanyID;
+        int chosenCustomerID;
+        Scanner scanner = new Scanner(System.in);
+        CompanyDaoImpl companyDao = new CompanyDaoImpl(args);
 
-        int params = args.length;
-        String DBname = "carsharing";
+        do {
+            printLogInMenu();
+            pointLogInMenu = scanner.nextInt();
 
-        if (params > 1) {
-            for (int i = 0; i < params - 1; i++) {
-                if ("-databaseFileName".equals(args[i])) {
-                    DBname = args[i + 1];
-                    break;
+            if (pointLogInMenu == 0) {
+                exit = true;
+
+            } else if (pointLogInMenu == 2) {
+                //Customer Menu
+                if (companyDao.printAllCustomers()) {
+                    do {
+                        chosenCustomerID = companyDao.chooseCustomer();
+                        if (chosenCustomerID == 0) {
+                            backToLogInMenu = true;
+                        } else {
+                            customerMenu(chosenCustomerID, companyDao);
+                            backToLogInMenu = true;
+                        }
+                    } while (!backToLogInMenu);
+                    backToLogInMenu = false;
                 }
+
+            } else if (pointLogInMenu == 3) {
+                //Create customer
+                companyDao.createCustomer();
+            } else if (pointLogInMenu == 1) {
+                //Manager Menu
+                printDBCompanyMenu();
+                do {
+                    pointDBCompanyMenu = scanner.nextInt();
+                    if (pointDBCompanyMenu == 1) {
+                        if (companyDao.printAllCompanies()) {
+                            do {
+                                chosenCompanyID = companyDao.chooseCompany();
+                                if (chosenCompanyID == 0) {
+                                    backToDBCompanyMenu = true;
+                                } else {
+                                    carsInCompanyMenu(chosenCompanyID, companyDao);
+                                    backToDBCompanyMenu = true;
+                                }
+                            } while (!backToDBCompanyMenu);
+                            backToDBCompanyMenu = false;
+                            printDBCompanyMenu();
+                        } else {
+                            printDBCompanyMenu();
+                        }
+                    } else if (pointDBCompanyMenu == 2) {
+                        companyDao.createCompany();
+                        printDBCompanyMenu();
+                    } else {
+                        backToLogInMenu = true;
+                    }
+                } while (!backToLogInMenu);
+                backToLogInMenu = false;
+                pointDBCompanyMenu = 0;
             }
+        } while (!exit);
+
+        companyDao.closeCompanyDaoImpl();
+
+    }
+
+    private static void customerMenu(int chosenCustomerID, CompanyDaoImpl companyDao) {
+        printCustomerMenu();
+        boolean backToLoginMenu = false;
+        int pointCustomerMenu;
+        Scanner customerMenuScanner = new Scanner(System.in);
+        do {
+            pointCustomerMenu = customerMenuScanner.nextInt();
+            if (pointCustomerMenu == 1) {
+                //Rent a car
+                if (companyDao.printAllCompanies() && companyDao.customerDoNotRentCar(chosenCustomerID, true)) {
+                    int companyIDForCarRent = companyDao.chooseCompany();
+                    if (companyIDForCarRent == 0) {
+                        printCustomerMenu();
+                    } else {
+                        //choosing car in chosen company
+                        companyDao.chooseCarForRent(chosenCustomerID, companyIDForCarRent);
+                        printCustomerMenu();
+                    }
+                } else {
+                    printCustomerMenu();
+                }
+            } else if (pointCustomerMenu == 2) {
+                //Return a rented car
+                if (companyDao.customerDoNotRentCar(chosenCustomerID, false)) {
+                    System.out.println("You didn't rent a car!");
+                    printCustomerMenu();
+                } else {
+                    companyDao.returnRentedCar(chosenCustomerID);
+                    printCustomerMenu();
+                }
+            } else if (pointCustomerMenu == 3) {
+                //Show my rented car
+                companyDao.showCarRented(chosenCustomerID);
+                printCustomerMenu();
+            }
+            else if (pointCustomerMenu == 0) {
+                backToLoginMenu = true;
+            }
+        } while (!backToLoginMenu);
+    }
+
+
+
+    private static void carsInCompanyMenu(int chosenCompanyID, CompanyDaoImpl companyDao) {
+        String companyName = companyDao.getCompanyName(chosenCompanyID);
+        if (!companyName.isEmpty()) {
+            printCarsInCompanyMenu(companyName);
+            boolean backToDBCompanyMenu = false;
+            int pointCarsInCompanyMenu;
+            Scanner carsInCompanyMenuScanner = new Scanner(System.in);
+            do {
+                pointCarsInCompanyMenu = carsInCompanyMenuScanner.nextInt();
+                if (pointCarsInCompanyMenu == 1) {
+                    companyDao.printAllCarsInCompany(chosenCompanyID);
+                    printCarsInCompanyMenu(companyName);
+                } else if (pointCarsInCompanyMenu == 2) {
+                    companyDao.createCarInCompany(chosenCompanyID);
+                    printCarsInCompanyMenu(companyName);
+                } else if (pointCarsInCompanyMenu == 0) {
+                    backToDBCompanyMenu = true;
+                }
+            } while (!backToDBCompanyMenu);
         }
+    }
 
-        String DbUrlFinal = DB_URL.concat(DBname);
+    private static void printCustomerMenu() {
+        System.out.println("\n1. Rent a car");
+        System.out.println("2. Return a rented car");
+        System.out.println("3. My rented car");
+        System.out.println("0. Back");
+    }
 
-        try {
-            // STEP 1: Register JDBC driver
-            Class.forName(JDBC_DRIVER);
+    private static void printCarsInCompanyMenu(String companyName) {
+        System.out.println("\n'" + companyName + "' company:");
+        System.out.println("1. Car list");
+        System.out.println("2. Create a car");
+        System.out.println("0. Back");
+    }
 
-            //STEP 2: Open a connection
+    private static void printDBCompanyMenu() {
+        System.out.println("\n1. Company list");
+        System.out.println("2. Create a company");
+        System.out.println("0. Back");
+    }
 
-            //conn = DriverManager.getConnection(DbUrlFinal,USER,PASS);
-            conn = DriverManager.getConnection(DbUrlFinal);
-            conn.setAutoCommit(true);
-
-            //STEP 3: Execute a query
-            //Creating table in given database
-            stmt = conn.createStatement();
-            String sql = "DROP TABLE IF EXISTS COMPANY;" +
-                    "CREATE TABLE   COMPANY " +
-                    "(ID INTEGER, " +
-                    " NAME VARCHAR(255))";
-            stmt.executeUpdate(sql);
-            //Created table in given database
-
-            // STEP 4: Clean-up environment
-            stmt.close();
-            conn.close();
-        } catch(SQLException se) {
-            //Handle errors for JDBC
-            se.printStackTrace();
-        } catch(Exception e) {
-            //Handle errors for Class.forName
-            e.printStackTrace();
-        } finally {
-            //finally block used to close resources
-            try{
-                if(stmt!=null) stmt.close();
-            } catch(SQLException se2) {
-            } // nothing we can do
-            try {
-                if(conn!=null) conn.close();
-            } catch(SQLException se){
-                se.printStackTrace();
-            } //end finally try
-        } //end try
+    private static void printLogInMenu() {
+        System.out.println("\n1. Log in as a manager");
+        System.out.println("2. Log in as a customer");
+        System.out.println("3. Create a customer");
+        System.out.println("0. Exit");
     }
 }
+
